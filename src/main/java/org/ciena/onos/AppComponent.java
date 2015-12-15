@@ -43,9 +43,6 @@ import org.onosproject.net.link.LinkService;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.kafka.clients.producer.*;
-import org.apache.kafka.clients.producer.internals.*;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 
 import com.google.common.base.Strings;
 
@@ -131,11 +128,11 @@ public class AppComponent {
 		// "org.apache.kafka.common.serialization.StringSerializer");
 		// props.put("value.serializer",
 		// "org.apache.kafka.common.serialization.StringSerializer");
+		// props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG,
 
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-		props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
 
 		try {
 			producer = new KafkaProducer<String, String>(props);
