@@ -15,11 +15,13 @@
  */
 package org.ciena.onos;
 
+import java.util.Dictionary;
 import java.util.Properties;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
@@ -27,6 +29,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceEvent.Type;
 import org.onosproject.net.device.DeviceListener;
@@ -34,6 +38,7 @@ import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.link.LinkEvent;
 import org.onosproject.net.link.LinkListener;
 import org.onosproject.net.link.LinkService;
+import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +64,12 @@ public class AppComponent {
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected LinkService linkService;
 
+	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+	protected MastershipService mastershipService;
+
+	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+	protected ComponentConfigService configService;
+
 	@Property(name = "kafkaBootstrapServer", value = DEFAULT_KAFKA_BOOTSTRAP_SERVER, label = "Kafka bootstrap server for initial connection")
 	private String kafkaBootstrapServer = DEFAULT_KAFKA_BOOTSTRAP_SERVER;
 
@@ -75,9 +86,26 @@ public class AppComponent {
 		return builder.toString();
 	}
 
+	@Modified
+	public void modified(ComponentContext context) {
+		Dictionary<?, ?> properties = context.getProperties();
+		//
+		// String s = Tools.get(properties, "newMaxEvents");
+		// maxEvents = Strings.isNullOrEmpty(s) ? DEFAULT_MAX_EVENTS :
+		// Integer.parseInt(s.trim())
+		//
+		// s = Tools.get(properties, "notificationEmail");
+		// notificationEmail = Strings.isNullOrEmpty(s) ? DEFAULT_EMAIL : s;
+		// ...
+	}
+
 	@Activate
 	protected void activate() {
 		log.error("Started");
+
+		if (configService != null) {
+			configService.registerProperties(this.getClass());
+		}
 
 		log.error("DKB: Attempting to connect to KAFKA at {}", kafkaBootstrapServer);
 		Properties props = new Properties();
@@ -109,7 +137,8 @@ public class AppComponent {
 
 			@Override
 			public void event(DeviceEvent event) {
-				if (event.type() != Type.PORT_STATS_UPDATED) {
+
+				if (event.type() != Type.PORT_STATS_UPDATED && mastershipService.isLocalMaster(event.subject().id())) {
 					log.error("**** DKB: DEVICE EVENT FOR: {}", event);
 					if (producer != null) {
 						producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, marshalEvent(event)));
@@ -122,7 +151,9 @@ public class AppComponent {
 
 			@Override
 			public void event(LinkEvent event) {
-				log.error("**** DKB: LINK EVENT FOR: {}", event);
+				if (mastershipService.isLocalMaster(event.subject().src().deviceId())) {
+					log.error("**** DKB: LINK EVENT FOR: {}", event);
+				}
 			}
 		};
 
@@ -143,6 +174,10 @@ public class AppComponent {
 
 	@Deactivate
 	protected void deactivate() {
+
+		if (configService != null) {
+			configService.unregisterProperties(this.getClass(), false);
+		}
 
 		log.info("Stopped");
 		if (deviceService != null) {

@@ -27,6 +27,13 @@
 
 
 	<dependencies>
+
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.compendium</artifactId>
+			<version>4.3.1</version>
+		</dependency>
+		
 		<dependency>
 			<groupId>org.onosproject</groupId>
 			<artifactId>onos-api</artifactId>
@@ -60,6 +67,7 @@
 			<version>1.9.8</version>
 			<scope>provided</scope>
 		</dependency>
+
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>
