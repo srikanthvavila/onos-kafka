@@ -28,7 +28,9 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.device.DeviceEvent;
@@ -41,6 +43,11 @@ import org.onosproject.net.link.LinkService;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.clients.producer.internals.*;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+
+import com.google.common.base.Strings;
 
 /**
  * Skeletal ONOS application component.
@@ -52,7 +59,7 @@ public class AppComponent {
 
 	private final static String DEVICE_TOPIC = "onos.device";
 	private final static String LINK_TOPIC = "onos.link";
-	private final static String DEFAULT_KAFKA_BOOTSTRAP_SERVER = "localhost:4242";
+	private final static String DEFAULT_KAFKA_SERVER = "localhost:9092";
 
 	private DeviceListener deviceListener = null;
 	private LinkListener linkListener = null;
@@ -70,8 +77,8 @@ public class AppComponent {
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected ComponentConfigService configService;
 
-	@Property(name = "kafkaBootstrapServer", value = DEFAULT_KAFKA_BOOTSTRAP_SERVER, label = "Kafka bootstrap server for initial connection")
-	private String kafkaBootstrapServer = DEFAULT_KAFKA_BOOTSTRAP_SERVER;
+	@Property(name = "kafkaServer", value = DEFAULT_KAFKA_SERVER, label = "Kafka server for initial connection")
+	private String kafkaServer = DEFAULT_KAFKA_SERVER;
 
 	private KafkaProducer<String, String> producer = null;
 
@@ -89,27 +96,30 @@ public class AppComponent {
 	@Modified
 	public void modified(ComponentContext context) {
 		Dictionary<?, ?> properties = context.getProperties();
-		//
-		// String s = Tools.get(properties, "newMaxEvents");
-		// maxEvents = Strings.isNullOrEmpty(s) ? DEFAULT_MAX_EVENTS :
-		// Integer.parseInt(s.trim())
-		//
-		// s = Tools.get(properties, "notificationEmail");
-		// notificationEmail = Strings.isNullOrEmpty(s) ? DEFAULT_EMAIL : s;
-		// ...
+
+		String value = Tools.get(properties, "kafkaServer");
+		String newKafkaServer = Strings.isNullOrEmpty(value) ? DEFAULT_KAFKA_SERVER : value.trim();
+		if (!newKafkaServer.equals(kafkaServer)) {
+			log.info("Kafka server updated from '{}' to '{}'", kafkaServer, newKafkaServer);
+			createKafkaProducer(newKafkaServer);
+		}
 	}
 
-	@Activate
-	protected void activate() {
-		log.error("Started");
-
-		if (configService != null) {
-			configService.registerProperties(this.getClass());
+	private synchronized void createKafkaProducer(String newKafkaServer) {
+		if (producer != null) {
+			producer.close();
 		}
 
-		log.error("DKB: Attempting to connect to KAFKA at {}", kafkaBootstrapServer);
+		// If they didn't specify the new Kafka server to which to connect,
+		// then this is either a re-connect or an initial connection
+		if (newKafkaServer != null) {
+			kafkaServer = newKafkaServer;
+		}
+
+		new DefaultPartitioner();
+		log.error("DKB: Attempting to connect to KAFKA at {}", kafkaServer);
 		Properties props = new Properties();
-		props.put("bootstrap.servers", kafkaBootstrapServer);
+		props.put("bootstrap.servers", kafkaServer);
 		// props.put("acks", "all");
 		// props.put("retries", 0);
 		// props.put("batch.size", 16384);
@@ -122,16 +132,33 @@ public class AppComponent {
 		// props.put("value.serializer",
 		// "org.apache.kafka.common.serialization.StringSerializer");
 
-		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+		props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
 
 		try {
 			producer = new KafkaProducer<String, String>(props);
 		} catch (Throwable e) {
-			log.error("Unable to connect to KAFKA at {} : {} : {}", kafkaBootstrapServer, e.getClass().getName(),
+			log.error("Unable to connect to KAFKA at {} : {} : {}", kafkaServer, e.getClass().getName(),
 					e.getMessage());
+			e.printStackTrace();
+			e.getCause().printStackTrace();
+			if (e.getCause().getCause() != null) {
+				e.getCause().getCause().printStackTrace();
+			}
 		}
+	}
+
+	@Activate
+	protected void activate() {
+		log.error("Started");
+
+		if (configService != null) {
+			configService.registerProperties(this.getClass());
+		}
+
+		createKafkaProducer(null);
 
 		deviceListener = new DeviceListener() {
 
