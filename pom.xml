@@ -72,6 +72,28 @@
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>
 			<version>0.9.0.0</version>
+			<type>bundle</type>
+		</dependency>
+
+		<dependency>
+			<groupId>net.jpountz.lz4</groupId>
+			<artifactId>lz4</artifactId>
+			<version>1.2.0</version>
+			<type>bundle</type>
+		</dependency>
+	
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <version>1.1.1.7</version>
+            <type>bundle</type>
+        </dependency>
+
+		<dependency>
+			<groupId>org.apache.kafka</groupId>
+			<artifactId>kafka-clients</artifactId>
+			<version>0.9.0.0</version>
+			<type>bundle</type>
 		</dependency>
 
 		<dependency>
@@ -135,31 +157,6 @@
 				<artifactId>maven-bundle-plugin</artifactId>
 				<version>2.5.3</version>
 				<extensions>true</extensions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<version>2.4.2</version>
-				<configuration>
-					<artifactSet>
-						<includes>
-							<include>org.ciena.onos:onos-kafka</include>
-							<include>org.apache.kafka:kafka-clients</include>
-							<include>net.jpountz.lz4:lz4</include>
-							<include>org.xerial.snappy:snappy-java</include>
-						</includes>
-					</artifactSet>
-					<createDependencyReducedPom>false</createDependencyReducedPom>
-					<detail>true</detail>
-				</configuration>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-					</execution>
-				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

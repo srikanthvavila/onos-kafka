@@ -28,7 +28,6 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
@@ -102,6 +101,10 @@ public class AppComponent {
 		}
 	}
 
+	public AppComponent() {
+		log.error("INIT");
+	}
+	
 	private synchronized void createKafkaProducer(String newKafkaServer) {
 		if (producer != null) {
 			producer.close();
@@ -113,7 +116,6 @@ public class AppComponent {
 			kafkaServer = newKafkaServer;
 		}
 
-		new DefaultPartitioner();
 		log.error("DKB: Attempting to connect to KAFKA at {}", kafkaServer);
 		Properties props = new Properties();
 		props.put("bootstrap.servers", kafkaServer);
@@ -140,9 +142,11 @@ public class AppComponent {
 			log.error("Unable to connect to KAFKA at {} : {} : {}", kafkaServer, e.getClass().getName(),
 					e.getMessage());
 			e.printStackTrace();
-			e.getCause().printStackTrace();
-			if (e.getCause().getCause() != null) {
-				e.getCause().getCause().printStackTrace();
+			if (e.getCause() != null) {
+				e.getCause().printStackTrace();
+				if (e.getCause().getCause() != null) {
+					e.getCause().getCause().printStackTrace();
+				}
 			}
 		}
 	}
