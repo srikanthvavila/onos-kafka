@@ -140,6 +140,61 @@
 				<artifactId>maven-bundle-plugin</artifactId>
 				<version>2.5.3</version>
 				<extensions>true</extensions>
+				<configuration>
+					<instructions>
+						<Export-Package>
+							org.ciena.onos.*;
+							org.apache.kafka.clients.producer.*;
+							org.apache.kafka.clients.*;
+							org.apache.kafka.common.*;
+							net.jpountz.*;
+						</Export-Package>
+					</instructions>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>2.4.2</version>
+				<configuration>
+					<artifactSet>
+						<excludes>
+							<exclude>org.osgi:org.osgi.compendium</exclude>
+							<exclude>org.onosproject:onos-api</exclude>
+							<exclude>joda-time:joda-time</exclude>
+							<exclude>commons-configuration:commons-configuration</exclude>
+							<exclude>commons-lang:commons-lang</exclude>
+							<exclude>commons-logging:commons-logging</exclude>
+							<exclude>commons-collections:commons-collections</exclude>
+							<exclude>org.onosproject:onlab-rest</exclude>
+							<exclude>com.google.guava:guava</exclude>
+							<exclude>org.onosproject:onlab-misc</exclude>
+							<exclude>io.netty:netty</exclude>
+							<exclude>org.apache.commons:commons-lang3</exclude>
+							<exclude>com.eclipsesource.minimal-json:minimal-json</exclude>
+							<exclude>com.esotericsoftware:kryo</exclude>
+							<exclude>com.esotericsoftware:reflectasm</exclude>
+							<exclude>org.ow2.asm:asm</exclude>
+							<exclude>com.esotericsoftware:minlog</exclude>
+							<exclude>io.dropwizard.metrics:metrics-core</exclude>
+							<exclude>io.dropwizard.metrics:metrics-json</exclude>
+							<exclude>com.fasterxml.jackson.core:jackson-databind</exclude>
+							<exclude>com.fasterxml.jackson.core:jackson-annotations</exclude>
+							<exclude>com.fasterxml.jackson.core:jackson-core</exclude>
+							<!-- <exclude>org.onosproject:onlab-osgi</exclude> <exclude>org.apache.kafka:kafka-clients</exclude> 
+								<exclude>net.jpountz.lz4:lz4</exclude> <exclude>org.xerial.snappy:snappy-java</exclude> 
+								<exclude>org.objenesis:objenesis</exclude> -->
+						</excludes>
+					</artifactSet>
+				</configuration>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
