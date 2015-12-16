@@ -17,6 +17,7 @@ package org.ciena.onos;
 
 import java.util.Dictionary;
 import java.util.Properties;
+import java.util.concurrent.Future;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
@@ -25,12 +26,15 @@ import org.apache.felix.scr.annotations.Modified;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.cluster.ClusterService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceEvent.Type;
@@ -63,6 +67,7 @@ public class KafkaNotificationBridge {
 
 	private DeviceListener deviceListener = null;
 	private LinkListener linkListener = null;
+	private Callback closure = null;
 
 	// For subscribing to device-related events
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
@@ -73,6 +78,9 @@ public class KafkaNotificationBridge {
 
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected MastershipService mastershipService;
+
+	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+	protected ClusterService clusterService;
 
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected ComponentConfigService configService;
@@ -172,6 +180,7 @@ public class KafkaNotificationBridge {
 		// Close and existing producer
 		if (producer != null) {
 			producer.close();
+			producer = null;
 		}
 
 		// If they didn't specify the new Kafka server to which to connect,
@@ -180,13 +189,15 @@ public class KafkaNotificationBridge {
 			kafkaServer = newKafkaServer;
 		}
 
-		log.error("Attempting to connect to Kafka at {}", kafkaServer);
+		log.error("Attempting to connect to Kafka at {} as client {}", kafkaServer,
+				clusterService.getLocalNode().id().toString());
 
 		// TODO: These and others should be driven by configuration
 		Properties props = new Properties();
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
-		props.put(ProducerConfig.ACKS_CONFIG, "all");
-		props.put(ProducerConfig.RETRIES_CONFIG, 0);
+		props.put(ProducerConfig.CLIENT_ID_CONFIG, clusterService.getLocalNode().id().toString());
+		props.put(ProducerConfig.ACKS_CONFIG, "1");
+		props.put(ProducerConfig.RETRIES_CONFIG, 1);
 		props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
 		props.put(ProducerConfig.LINGER_MS_CONFIG, 1);
 		props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432);
@@ -216,6 +227,15 @@ public class KafkaNotificationBridge {
 
 		createKafkaProducer(null);
 
+		closure = new Callback() {
+			@Override
+			public void onCompletion(RecordMetadata meta, Exception e) {
+				if (e != null) {
+					log.error("FAILED TO SEND MESSAGE on topic {} : {}", meta.topic(), e);
+				}
+			}
+		};
+
 		deviceListener = new DeviceListener() {
 			@Override
 			public void event(DeviceEvent event) {
@@ -231,7 +251,7 @@ public class KafkaNotificationBridge {
 						if (producer != null) {
 							String encoded = marshalEvent(event);
 							log.error("SEND: {}", encoded);
-							producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded));
+							producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded), closure);
 						}
 					} else {
 						log.error("DROPPING DEVICE EVENT: not local master: {}",
