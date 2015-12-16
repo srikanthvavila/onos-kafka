@@ -194,20 +194,7 @@ public class KafkaNotificationBridge {
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
 		try {
-			/*
-			 * HACK: I hate OSGi and it won't let Kafka correctly load classes,
-			 * so to get around the pain and useless complexity that is OSGi, i
-			 * swap out the current thread class loader with the class loader
-			 * used to load this component. This seems to allow Kafka to load
-			 * what it needs. This is a hack and would be better not to do this.
-			 * Actually, it would be better not to have to deal with OSGi.
-			 */
-			ClassLoader save = Thread.currentThread().getContextClassLoader();
-			Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
-			producer = new KafkaProducer<String, String>(props, new StringSerializer(), new StringSerializer());
-			Thread.currentThread().setContextClassLoader(save);
-			log.error("Producer created to Kafka at {}", kafkaServer);
-
+			producer = new KafkaProducer<String, String>(props);
 		} catch (Exception e) {
 			log.error("Unable to create Kafka producer to {}, no events will be published on the Kafka bridge : {}",
 					kafkaServer, e.getClass().getName(), e.getMessage(), e);
@@ -239,11 +226,16 @@ public class KafkaNotificationBridge {
 				 * the current instance so that we get some load balancing
 				 * across instances in a clustered environment.
 				 */
-				if (event.type() != Type.PORT_STATS_UPDATED && mastershipService.isLocalMaster(event.subject().id())) {
-					if (producer != null) {
-						String encoded = marshalEvent(event);
-						log.error("SEND: {}", encoded);
-						producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded));
+				if (event.type() != Type.PORT_STATS_UPDATED) {
+					if (mastershipService.isLocalMaster(event.subject().id())) {
+						if (producer != null) {
+							String encoded = marshalEvent(event);
+							log.error("SEND: {}", encoded);
+							producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded));
+						}
+					} else {
+						log.error("DROPPING DEVICE EVENT: not local master: {}",
+								mastershipService.getMasterFor(event.subject().id()));
 					}
 				}
 			}
@@ -265,6 +257,9 @@ public class KafkaNotificationBridge {
 						log.error("SEND: {}", encoded);
 						producer.send(new ProducerRecord<String, String>(LINK_TOPIC, marshalEvent(event)));
 					}
+				} else {
+					log.error("DROPPING DEVICE EVENT: not local master: {}",
+							mastershipService.getMasterFor(event.subject().src().deviceId()));
 				}
 			}
 		};
