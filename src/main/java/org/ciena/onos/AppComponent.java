@@ -26,8 +26,10 @@ import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
@@ -100,12 +102,9 @@ public class AppComponent {
 			createKafkaProducer(newKafkaServer);
 		}
 	}
-
-	public AppComponent() {
-		log.error("INIT");
-	}
 	
 	private synchronized void createKafkaProducer(String newKafkaServer) {
+		
 		if (producer != null) {
 			producer.close();
 		}
@@ -116,22 +115,9 @@ public class AppComponent {
 			kafkaServer = newKafkaServer;
 		}
 
-		log.error("DKB: Attempting to connect to KAFKA at {}", kafkaServer);
+		log.error("Attempting to connect to Kafka at {}", kafkaServer);
 		Properties props = new Properties();
 		props.put("bootstrap.servers", kafkaServer);
-		// props.put("acks", "all");
-		// props.put("retries", 0);
-		// props.put("batch.size", 16384);
-		// props.put("linger.ms", 1);
-		// props.put("buffer.memory", 33554432);
-		// props.put("serializer.class", "kafka.serializer.StringEncoder");
-
-		// props.put("key.serializer",
-		// "org.apache.kafka.common.serialization.StringSerializer");
-		// props.put("value.serializer",
-		// "org.apache.kafka.common.serialization.StringSerializer");
-		// props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG,
-
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -139,6 +125,7 @@ public class AppComponent {
 		try {
 			producer = new KafkaProducer<String, String>(props);
 		} catch (Throwable e) {
+			// TODO: Catching Throwable here for debug purposes. You should never really catch Throwable
 			log.error("Unable to connect to KAFKA at {} : {} : {}", kafkaServer, e.getClass().getName(),
 					e.getMessage());
 			e.printStackTrace();
@@ -209,7 +196,7 @@ public class AppComponent {
 
 		log.info("Stopped");
 		if (deviceService != null) {
-			log.error("REMOVED DEVICE LISTENER");
+			log.error("Removing device listener for Kafka bridge");
 			deviceService.removeListener(deviceListener);
 		} else {
 			log.error("Unable to resolve device service");
@@ -218,6 +205,7 @@ public class AppComponent {
 
 		if (linkService != null) {
 			linkService.removeListener(linkListener);
+			log.error("Removing link listener for Kafka bridge");
 		} else {
 			log.error("Unable to resolve link service");
 		}
