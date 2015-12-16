@@ -44,7 +44,7 @@ import org.onosproject.net.link.LinkService;
  */
 public class AppComponentTest {
 
-	private AppComponent component;
+	private KafkaNotificationBridge component;
 
 	protected DeviceService mockDeviceService;
 	protected LinkService mockLinkService;
@@ -96,7 +96,7 @@ public class AppComponentTest {
 	@Test
 	public void basics() {
 		EasyMock.replay(mockDeviceService);
-		component = new AppComponent();
+		component = new KafkaNotificationBridge();
 		component.deviceService = mockDeviceService;
 		component.linkService = mockLinkService;
 		component.configService = mockConfigService;
