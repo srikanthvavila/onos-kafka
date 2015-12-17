@@ -267,11 +267,11 @@ public class KafkaNotificationBridge {
 			public void event(LinkEvent event) {
 
 				/*
-				 * Only publish events if the source of the link is mastered by
+				 * Only publish events if the destination of the link is mastered by
 				 * the current instance so that we get some load balancing
 				 * across instances in a clustered environement.
 				 */
-				if (mastershipService.isLocalMaster(event.subject().src().deviceId())) {
+				if (mastershipService.isLocalMaster(event.subject().dst().deviceId())) {
 					if (producer != null) {
 						String encoded = marshalEvent(event);
 						log.error("SEND: {}", encoded);
