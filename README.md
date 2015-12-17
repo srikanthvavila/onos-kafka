@@ -1,3 +1,6 @@
+![](https://img.shields.io/badge/BluePlanet%20ONOS-1.3.1-blue.svg)
+![](https://img.shields.io/badge/Apache%20Kafka-0.8.2.1-red.svg)
+![](https://img.shields.io/badge/ONOS-Supports%20Clustering-brightgreen.svg)
 # Kafka Based Device and Link Notification Publisher for ONOS
 
 This project provides an ONOS platform application that once installed an
