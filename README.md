@@ -18,7 +18,7 @@ publish notifications for those devices and links for which it is the master.
 For links 'mastership' is determined by the destination device of the link.
 
 ## Configuration
-The Kafka instance to which the applciation binds defaults to `localhost:9092`.
+The Kafka instance to which the application binds defaults to `localhost:9092`.
 This can be configured via the ONOS command line using the `cfg get` and
 `cfg set` commands on the property
 `org.ciena.onos.KafkaNotificationBridge kafka-server` the value when setting

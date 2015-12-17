@@ -17,7 +17,6 @@ package org.ciena.onos;
 
 import java.util.Dictionary;
 import java.util.Properties;
-import java.util.concurrent.Future;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
@@ -52,7 +51,7 @@ import com.google.common.base.Strings;
 /**
  * ONOS component that bridges device and link notifications to a Kafka message
  * bus.
- * 
+ *
  * @author David K. Bainbridge (dbainbri@ciena.com)
  */
 @Component(immediate = true)
@@ -93,7 +92,7 @@ public class KafkaNotificationBridge {
 	/**
 	 * Marshal a {@link org.onosproject.net.device.DeviceEvent} to a stringified
 	 * JSON object.
-	 * 
+	 *
 	 * @param event
 	 *            the device event to marshal
 	 * @return stringified JSON encoding of the device event
@@ -128,7 +127,7 @@ public class KafkaNotificationBridge {
 	/**
 	 * Marshal a {@link org.onosproject.net.link.LinkEvent} to a stringified
 	 * JSON object.
-	 * 
+	 *
 	 * @param event
 	 *            the link event to marshal
 	 * @return stringified JSON encoding of the link event
@@ -151,7 +150,7 @@ public class KafkaNotificationBridge {
 	/**
 	 * Called when component configuration options are modified and makes the
 	 * appropriate changes to the components implementation.
-	 * 
+	 *
 	 * @param context
 	 *            component context used to retrieve properties
 	 */
@@ -171,7 +170,7 @@ public class KafkaNotificationBridge {
 	 * Creates a KafkaProducer instances based on the configuration parameters
 	 * of the component. This producer is used internally for sending messages
 	 * over the Kafka bus.
-	 * 
+	 *
 	 * @param newKafkaServer
 	 *            the server and port to which the producer should be connected
 	 */
@@ -269,7 +268,7 @@ public class KafkaNotificationBridge {
 				/*
 				 * Only publish events if the destination of the link is mastered by
 				 * the current instance so that we get some load balancing
-				 * across instances in a clustered environement.
+				 * across instances in a clustered environment.
 				 */
 				if (mastershipService.isLocalMaster(event.subject().dst().deviceId())) {
 					if (producer != null) {
