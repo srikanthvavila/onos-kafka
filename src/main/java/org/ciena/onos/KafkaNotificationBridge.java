@@ -188,7 +188,7 @@ public class KafkaNotificationBridge {
 			kafkaServer = newKafkaServer;
 		}
 
-		log.error("Attempting to connect to Kafka at {} as client {}", kafkaServer,
+		log.debug("Attempting to connect to Kafka at {} as client {}", kafkaServer,
 				clusterService.getLocalNode().id().toString());
 
 		// TODO: These and others should be driven by configuration
@@ -205,6 +205,8 @@ public class KafkaNotificationBridge {
 
 		try {
 			producer = new KafkaProducer<String, String>(props);
+			log.info("Connected to Kafka at {} as client {}", kafkaServer,
+					clusterService.getLocalNode().id().toString());
 		} catch (Exception e) {
 			log.error("Unable to create Kafka producer to {}, no events will be published on the Kafka bridge : {}",
 					kafkaServer, e.getClass().getName(), e.getMessage(), e);
@@ -213,7 +215,7 @@ public class KafkaNotificationBridge {
 
 	@Activate
 	protected void activate() {
-		log.error("Started");
+		log.info("Started");
 
 		/*
 		 * Register component configuration properties so that they can be set
@@ -230,7 +232,7 @@ public class KafkaNotificationBridge {
 			@Override
 			public void onCompletion(RecordMetadata meta, Exception e) {
 				if (e != null) {
-					log.error("FAILED TO SEND MESSAGE on topic {} : {}", meta.topic(), e);
+					log.error("Failed to send message on topic {} : {}", meta.topic(), e);
 				}
 			}
 		};
@@ -249,11 +251,11 @@ public class KafkaNotificationBridge {
 					if (mastershipService.isLocalMaster(event.subject().id())) {
 						if (producer != null) {
 							String encoded = marshalEvent(event);
-							log.error("SEND: {}", encoded);
+							log.debug("SEND: {}", encoded);
 							producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded), closure);
 						}
 					} else {
-						log.error("DROPPING DEVICE EVENT: not local master: {}",
+						log.debug("DROPPING DEVICE EVENT: not local master: {}",
 								mastershipService.getMasterFor(event.subject().id()));
 					}
 				}
@@ -266,18 +268,18 @@ public class KafkaNotificationBridge {
 			public void event(LinkEvent event) {
 
 				/*
-				 * Only publish events if the destination of the link is mastered by
-				 * the current instance so that we get some load balancing
-				 * across instances in a clustered environment.
+				 * Only publish events if the destination of the link is
+				 * mastered by the current instance so that we get some load
+				 * balancing across instances in a clustered environment.
 				 */
 				if (mastershipService.isLocalMaster(event.subject().dst().deviceId())) {
 					if (producer != null) {
 						String encoded = marshalEvent(event);
-						log.error("SEND: {}", encoded);
+						log.debug("SEND: {}", encoded);
 						producer.send(new ProducerRecord<String, String>(LINK_TOPIC, marshalEvent(event)));
 					}
 				} else {
-					log.error("DROPPING DEVICE EVENT: not local master: {}",
+					log.debug("DROPPING LINK EVENT: not local master: {}",
 							mastershipService.getMasterFor(event.subject().src().deviceId()));
 				}
 			}
@@ -285,7 +287,7 @@ public class KafkaNotificationBridge {
 
 		if (deviceService != null) {
 			deviceService.addListener(deviceListener);
-			log.error("Added device notification listener for Kafka bridge");
+			log.info("Added device notification listener for Kafka bridge");
 		} else {
 			log.error(
 					"Unable to resolve device service and add device listener, no device events will be published on Kafka bridge");
@@ -293,7 +295,7 @@ public class KafkaNotificationBridge {
 
 		if (linkService != null) {
 			linkService.addListener(linkListener);
-			log.error("Added link notification listener for Kafka bridge");
+			log.info("Added link notification listener for Kafka bridge");
 		} else {
 			log.error(
 					"Unable to resolve link service and add link listener, no link events will be published on Kafka bridge");
@@ -314,14 +316,14 @@ public class KafkaNotificationBridge {
 		}
 
 		if (deviceService != null) {
-			log.error("Removing device listener for Kafka bridge");
+			log.info("Removing device listener for Kafka bridge");
 			deviceService.removeListener(deviceListener);
 			deviceService = null;
 		}
 
 		if (linkService != null) {
 			linkService.removeListener(linkListener);
-			log.error("Removing link listener for Kafka bridge");
+			log.info("Removing link listener for Kafka bridge");
 			linkService = null;
 		}
 
