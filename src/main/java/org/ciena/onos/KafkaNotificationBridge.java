@@ -141,7 +141,7 @@ public class KafkaNotificationBridge {
 		builder.append(String.format("\"src\":\"%s\",", event.subject().src().deviceId().toString()));
 		builder.append(String.format("\"src-port\":%d,", event.subject().src().port().toLong()));
 		builder.append(String.format("\"dst\":\"%s\",", event.subject().dst().deviceId().toString()));
-		builder.append(String.format("\"dst-port\":%d", event.subject().dst().port().toLong()));
+		builder.append(String.format("\"dst-port\":%d,", event.subject().dst().port().toLong()));
 		builder.append(String.format("\"state\":\"%s\",", event.subject().state()));
 		builder.append(String.format("\"durable\":%s", event.subject().isDurable()));
 		builder.append('}');

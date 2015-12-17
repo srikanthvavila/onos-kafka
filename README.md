@@ -26,6 +26,7 @@ The Kafka bridge application encodes the `DeviceEvent` and the `LinkEvent` as
 depicted in the following examples.
 
 #### DeviceEvent
+    // Without Port Information
     {  
        "type":"DEVICE_UPDATED",
        "time":1450303251479,
@@ -41,6 +42,28 @@ depicted in the following examples.
        }
     }
     
+    // With Port Information
+    {
+       "type":"PORT_UPDATED",
+       "time":1450304732512,
+       "subject":{
+          "id":"of:0000000000000001",
+          "chassis":"1",
+          "hw-version":"Open vSwitch",
+          "manufacturer":"Nicira, Inc.",
+          "serial-number":"None",
+          "sw-version":"2.3.2",
+          "provider":"org.onosproject.provider.openflow",
+          "type":"SWITCH"
+       },
+       "port":{
+          "type":"COPPER",
+          "number":2,
+          "speed":10,
+          "enabled":true
+       }
+    }
+
 #### LinkEvent
     {  
        "type":"LINK_REMOVED",
