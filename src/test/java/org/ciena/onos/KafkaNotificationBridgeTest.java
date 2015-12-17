@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Open Networking Laboratory
+ * Copyright 2015 Ciena Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@ import org.onlab.osgi.TestServiceDirectory;
 import org.onlab.rest.BaseResource;
 import org.onosproject.cfg.ComponentConfigService;
 import org.onosproject.cfg.ConfigProperty;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
 import org.onosproject.codec.CodecService;
 import org.onosproject.codec.impl.CodecManager;
 import org.onosproject.mastership.MastershipService;
@@ -42,7 +45,7 @@ import org.onosproject.net.link.LinkService;
 /**
  * Set of tests of the ONOS application component.
  */
-public class AppComponentTest {
+public class KafkaNotificationBridgeTest {
 
 	private KafkaNotificationBridge component;
 
@@ -50,6 +53,9 @@ public class AppComponentTest {
 	protected LinkService mockLinkService;
 	protected ComponentConfigService mockConfigService;
 	protected MastershipService mockMastershipService;
+	protected ClusterService mockClusterService;
+	protected ControllerNode mockControllerNode;
+	protected NodeId mockNodeId;
 
 	@Before
 	public void setUpMocks() {
@@ -70,9 +76,20 @@ public class AppComponentTest {
 		mockConfigService = EasyMock.createMock(ComponentConfigService.class);
 		Set<ConfigProperty> config = new HashSet<ConfigProperty>();
 		EasyMock.expect(mockConfigService.getProperties(isA(String.class))).andReturn(config).anyTimes();
+		mockConfigService.registerProperties(isA(Class.class));
+		EasyMock.expectLastCall().once();
+		mockConfigService.unregisterProperties(isA(Class.class), EasyMock.anyBoolean());
+		EasyMock.expectLastCall().once();
 
 		mockMastershipService = EasyMock.createMock(MastershipService.class);
 		EasyMock.expect(mockMastershipService.isLocalMaster(isA(DeviceId.class))).andReturn(true).anyTimes();
+
+		mockNodeId = new NodeId("sample-id");
+		mockControllerNode = EasyMock.createMock(ControllerNode.class);
+		EasyMock.expect(mockControllerNode.id()).andReturn(mockNodeId).anyTimes();
+
+		mockClusterService = EasyMock.createMock(ClusterService.class);
+		EasyMock.expect(mockClusterService.getLocalNode()).andReturn(mockControllerNode).anyTimes();
 
 		// Register the services needed for the test
 		CodecManager codecService = new CodecManager();
@@ -81,7 +98,6 @@ public class AppComponentTest {
 				.add(CodecService.class, codecService);
 
 		BaseResource.setServiceDirectory(testDirectory);
-
 	}
 
 	/**
@@ -96,11 +112,17 @@ public class AppComponentTest {
 	@Test
 	public void basics() {
 		EasyMock.replay(mockDeviceService);
+		EasyMock.replay(mockLinkService);
+		EasyMock.replay(mockConfigService);
+		EasyMock.replay(mockMastershipService);
+		EasyMock.replay(mockClusterService);
+		EasyMock.replay(mockControllerNode);
 		component = new KafkaNotificationBridge();
 		component.deviceService = mockDeviceService;
 		component.linkService = mockLinkService;
 		component.configService = mockConfigService;
 		component.mastershipService = mockMastershipService;
+		component.clusterService = mockClusterService;
 		component.activate();
 	}
 

@@ -17,6 +17,7 @@ package org.ciena.onos;
 
 import java.util.Dictionary;
 import java.util.Properties;
+import java.util.concurrent.Future;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
@@ -25,12 +26,15 @@ import org.apache.felix.scr.annotations.Modified;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.cluster.ClusterService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceEvent.Type;
@@ -42,8 +46,6 @@ import org.onosproject.net.link.LinkService;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 
 import com.google.common.base.Strings;
 
@@ -65,6 +67,7 @@ public class KafkaNotificationBridge {
 
 	private DeviceListener deviceListener = null;
 	private LinkListener linkListener = null;
+	private Callback closure = null;
 
 	// For subscribing to device-related events
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
@@ -75,6 +78,9 @@ public class KafkaNotificationBridge {
 
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected MastershipService mastershipService;
+
+	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+	protected ClusterService clusterService;
 
 	@Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
 	protected ComponentConfigService configService;
@@ -174,6 +180,7 @@ public class KafkaNotificationBridge {
 		// Close and existing producer
 		if (producer != null) {
 			producer.close();
+			producer = null;
 		}
 
 		// If they didn't specify the new Kafka server to which to connect,
@@ -182,35 +189,23 @@ public class KafkaNotificationBridge {
 			kafkaServer = newKafkaServer;
 		}
 
-		log.error("Attempting to connect to Kafka at {}", kafkaServer);
+		log.error("Attempting to connect to Kafka at {} as client {}", kafkaServer,
+				clusterService.getLocalNode().id().toString());
 
 		// TODO: These and others should be driven by configuration
 		Properties props = new Properties();
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
-		props.put(ProducerConfig.ACKS_CONFIG, "all");
-		props.put(ProducerConfig.RETRIES_CONFIG, 0);
+		props.put(ProducerConfig.CLIENT_ID_CONFIG, clusterService.getLocalNode().id().toString());
+		props.put(ProducerConfig.ACKS_CONFIG, "1");
+		props.put(ProducerConfig.RETRIES_CONFIG, 1);
 		props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
 		props.put(ProducerConfig.LINGER_MS_CONFIG, 1);
 		props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432);
 		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-		props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, DefaultPartitioner.class.getName());
 
 		try {
-			/*
-			 * HACK: I hate OSGi and it won't let Kafka correctly load classes,
-			 * so to get around the pain and useless complexity that is OSGi, i
-			 * swap out the current thread class loader with the class loader
-			 * used to load this component. This seems to allow Kafka to load
-			 * what it needs. This is a hack and would be better not to do this.
-			 * Actually, it would be better not to have to deal with OSGi.
-			 */
-			ClassLoader save = Thread.currentThread().getContextClassLoader();
-			Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
-			producer = new KafkaProducer<String, String>(props, new StringSerializer(), new StringSerializer());
-			Thread.currentThread().setContextClassLoader(save);
-			log.error("Producer created to Kafka at {}", kafkaServer);
-
+			producer = new KafkaProducer<String, String>(props);
 		} catch (Exception e) {
 			log.error("Unable to create Kafka producer to {}, no events will be published on the Kafka bridge : {}",
 					kafkaServer, e.getClass().getName(), e.getMessage(), e);
@@ -232,6 +227,15 @@ public class KafkaNotificationBridge {
 
 		createKafkaProducer(null);
 
+		closure = new Callback() {
+			@Override
+			public void onCompletion(RecordMetadata meta, Exception e) {
+				if (e != null) {
+					log.error("FAILED TO SEND MESSAGE on topic {} : {}", meta.topic(), e);
+				}
+			}
+		};
+
 		deviceListener = new DeviceListener() {
 			@Override
 			public void event(DeviceEvent event) {
@@ -242,11 +246,16 @@ public class KafkaNotificationBridge {
 				 * the current instance so that we get some load balancing
 				 * across instances in a clustered environment.
 				 */
-				if (event.type() != Type.PORT_STATS_UPDATED && mastershipService.isLocalMaster(event.subject().id())) {
-					if (producer != null) {
-						String encoded = marshalEvent(event);
-						log.error("SEND: {}", encoded);
-						producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded));
+				if (event.type() != Type.PORT_STATS_UPDATED) {
+					if (mastershipService.isLocalMaster(event.subject().id())) {
+						if (producer != null) {
+							String encoded = marshalEvent(event);
+							log.error("SEND: {}", encoded);
+							producer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded), closure);
+						}
+					} else {
+						log.error("DROPPING DEVICE EVENT: not local master: {}",
+								mastershipService.getMasterFor(event.subject().id()));
 					}
 				}
 			}
@@ -268,6 +277,9 @@ public class KafkaNotificationBridge {
 						log.error("SEND: {}", encoded);
 						producer.send(new ProducerRecord<String, String>(LINK_TOPIC, marshalEvent(event)));
 					}
+				} else {
+					log.error("DROPPING DEVICE EVENT: not local master: {}",
+							mastershipService.getMasterFor(event.subject().src().deviceId()));
 				}
 			}
 		};
