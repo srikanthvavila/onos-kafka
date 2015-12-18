@@ -41,89 +41,91 @@ import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.link.LinkListener;
 import org.onosproject.net.link.LinkService;
+import org.osgi.service.component.ComponentContext;
 
 /**
  * Set of tests of the ONOS application component.
  */
 public class KafkaNotificationBridgeTest {
 
-	private KafkaNotificationBridge component;
+    private KafkaNotificationBridge component;
 
-	protected DeviceService mockDeviceService;
-	protected LinkService mockLinkService;
-	protected ComponentConfigService mockConfigService;
-	protected MastershipService mockMastershipService;
-	protected ClusterService mockClusterService;
-	protected ControllerNode mockControllerNode;
-	protected NodeId mockNodeId;
+    protected DeviceService mockDeviceService;
+    protected LinkService mockLinkService;
+    protected ComponentConfigService mockConfigService;
+    protected MastershipService mockMastershipService;
+    protected ClusterService mockClusterService;
+    protected ControllerNode mockControllerNode;
+    protected ComponentContext mockContext;
+    protected NodeId mockNodeId;
 
-	@Before
-	public void setUpMocks() {
-		mockDeviceService = EasyMock.createMock(DeviceService.class);
-		EasyMock.expect(mockDeviceService.isAvailable(isA(DeviceId.class))).andReturn(true).anyTimes();
-		EasyMock.expect(mockDeviceService.getRole(isA(DeviceId.class))).andReturn(MastershipRole.MASTER).anyTimes();
-		mockDeviceService.addListener(isA(DeviceListener.class));
-		EasyMock.expectLastCall().once();
-		mockDeviceService.removeListener(isA(DeviceListener.class));
-		EasyMock.expectLastCall().once();
+    @Before
+    public void setUpMocks() {
+        mockDeviceService = EasyMock.createMock(DeviceService.class);
+        EasyMock.expect(mockDeviceService.isAvailable(isA(DeviceId.class))).andReturn(true).anyTimes();
+        EasyMock.expect(mockDeviceService.getRole(isA(DeviceId.class))).andReturn(MastershipRole.MASTER).anyTimes();
+        mockDeviceService.addListener(isA(DeviceListener.class));
+        EasyMock.expectLastCall().once();
+        mockDeviceService.removeListener(isA(DeviceListener.class));
+        EasyMock.expectLastCall().once();
 
-		mockLinkService = EasyMock.createMock(LinkService.class);
-		mockLinkService.addListener(isA(LinkListener.class));
-		EasyMock.expectLastCall().once();
-		mockLinkService.removeListener(isA(LinkListener.class));
-		EasyMock.expectLastCall().once();
+        mockLinkService = EasyMock.createMock(LinkService.class);
+        mockLinkService.addListener(isA(LinkListener.class));
+        EasyMock.expectLastCall().once();
+        mockLinkService.removeListener(isA(LinkListener.class));
+        EasyMock.expectLastCall().once();
 
-		mockConfigService = EasyMock.createMock(ComponentConfigService.class);
-		Set<ConfigProperty> config = new HashSet<ConfigProperty>();
-		EasyMock.expect(mockConfigService.getProperties(isA(String.class))).andReturn(config).anyTimes();
-		mockConfigService.registerProperties(isA(Class.class));
-		EasyMock.expectLastCall().once();
-		mockConfigService.unregisterProperties(isA(Class.class), EasyMock.anyBoolean());
-		EasyMock.expectLastCall().once();
+        mockConfigService = EasyMock.createMock(ComponentConfigService.class);
+        Set<ConfigProperty> config = new HashSet<ConfigProperty>();
+        EasyMock.expect(mockConfigService.getProperties(isA(String.class))).andReturn(config).anyTimes();
+        mockConfigService.registerProperties(isA(Class.class));
+        EasyMock.expectLastCall().once();
+        mockConfigService.unregisterProperties(isA(Class.class), EasyMock.anyBoolean());
+        EasyMock.expectLastCall().once();
 
-		mockMastershipService = EasyMock.createMock(MastershipService.class);
-		EasyMock.expect(mockMastershipService.isLocalMaster(isA(DeviceId.class))).andReturn(true).anyTimes();
+        mockMastershipService = EasyMock.createMock(MastershipService.class);
+        EasyMock.expect(mockMastershipService.isLocalMaster(isA(DeviceId.class))).andReturn(true).anyTimes();
 
-		mockNodeId = new NodeId("sample-id");
-		mockControllerNode = EasyMock.createMock(ControllerNode.class);
-		EasyMock.expect(mockControllerNode.id()).andReturn(mockNodeId).anyTimes();
+        mockNodeId = new NodeId("sample-id");
+        mockControllerNode = EasyMock.createMock(ControllerNode.class);
+        EasyMock.expect(mockControllerNode.id()).andReturn(mockNodeId).anyTimes();
 
-		mockClusterService = EasyMock.createMock(ClusterService.class);
-		EasyMock.expect(mockClusterService.getLocalNode()).andReturn(mockControllerNode).anyTimes();
+        mockClusterService = EasyMock.createMock(ClusterService.class);
+        EasyMock.expect(mockClusterService.getLocalNode()).andReturn(mockControllerNode).anyTimes();
 
-		// Register the services needed for the test
-		CodecManager codecService = new CodecManager();
-		codecService.activate();
-		ServiceDirectory testDirectory = new TestServiceDirectory().add(DeviceService.class, mockDeviceService)
-				.add(CodecService.class, codecService);
+        // Register the services needed for the test
+        CodecManager codecService = new CodecManager();
+        codecService.activate();
+        ServiceDirectory testDirectory = new TestServiceDirectory().add(DeviceService.class, mockDeviceService)
+                .add(CodecService.class, codecService);
 
-		BaseResource.setServiceDirectory(testDirectory);
-	}
+        BaseResource.setServiceDirectory(testDirectory);
+    }
 
-	/**
-	 * Verifies test mocks.
-	 */
-	@After
-	public void tearDownMocks() {
-		component.deactivate();
-		EasyMock.verify(mockDeviceService);
-	}
+    /**
+     * Verifies test mocks.
+     */
+    @After
+    public void tearDownMocks() {
+        component.deactivate();
+        EasyMock.verify(mockDeviceService);
+    }
 
-	@Test
-	public void basics() {
-		EasyMock.replay(mockDeviceService);
-		EasyMock.replay(mockLinkService);
-		EasyMock.replay(mockConfigService);
-		EasyMock.replay(mockMastershipService);
-		EasyMock.replay(mockClusterService);
-		EasyMock.replay(mockControllerNode);
-		component = new KafkaNotificationBridge();
-		component.deviceService = mockDeviceService;
-		component.linkService = mockLinkService;
-		component.configService = mockConfigService;
-		component.mastershipService = mockMastershipService;
-		component.clusterService = mockClusterService;
-		component.activate();
-	}
+    @Test
+    public void basics() {
+        EasyMock.replay(mockDeviceService);
+        EasyMock.replay(mockLinkService);
+        EasyMock.replay(mockConfigService);
+        EasyMock.replay(mockMastershipService);
+        EasyMock.replay(mockClusterService);
+        EasyMock.replay(mockControllerNode);
+        component = new KafkaNotificationBridge();
+        component.deviceService = mockDeviceService;
+        component.linkService = mockLinkService;
+        component.configService = mockConfigService;
+        component.mastershipService = mockMastershipService;
+        component.clusterService = mockClusterService;
+        component.activate(null);
+    }
 
 }
