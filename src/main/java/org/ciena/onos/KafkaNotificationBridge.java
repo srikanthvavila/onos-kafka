@@ -17,7 +17,10 @@ package org.ciena.onos;
 
 import java.io.IOException;
 import java.util.Dictionary;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.felix.scr.annotations.Activate;
@@ -27,6 +30,7 @@ import org.apache.felix.scr.annotations.Modified;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -36,21 +40,17 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
 import org.onosproject.cluster.ClusterService;
-import org.onosproject.mastership.MastershipService;
-import org.onosproject.net.device.DeviceEvent;
-import org.onosproject.net.device.DeviceEvent.Type;
-import org.onosproject.net.device.DeviceListener;
-import org.onosproject.net.device.DeviceService;
-import org.onosproject.net.link.LinkEvent;
-import org.onosproject.net.link.LinkListener;
-import org.onosproject.net.link.LinkService;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
 
 /**
  * ONOS component that bridges device and link notifications to a Kafka message
@@ -59,12 +59,13 @@ import com.rabbitmq.client.ConnectionFactory;
  * @author David K. Bainbridge (dbainbri@ciena.com)
  */
 @Component(immediate = true)
-public class KafkaNotificationBridge {
+@Service
+public class KafkaNotificationBridge implements PublisherRegistry<PublisherSource> {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
-
-    private final static String DEVICE_TOPIC = "onos.device";
-    private final static String LINK_TOPIC = "onos.link";
+    
+	private final static String DEVICE_EVENT_PUBLISHER_ID = "device.events";
+	private final static String LINK_EVENT_PUBLISHER_ID = "link.events";
 
     /*
      * Property names used with ONOS to define properties that are used when
@@ -73,6 +74,10 @@ public class KafkaNotificationBridge {
     private final static String PUBLISH_RABBIT_CONFIG = "publish.rabbit";
     private final static String RABBIT_HOST_CONFIG = "rabbit.host";
     private final static String RABBIT_PORT_CONFIG = "rabbit.port";
+    private final static String RABBIT_USER_CONFIG = "rabbit.user";
+    private final static String RABBIT_PASSWORD_CONFIG = "rabbit.password";
+    private final static String RABBIT_EXCHANGE_CONFIG = "rabbit.exchange";
+    private final static String RABBIT_TOPIC_CONFIG = "rabbit.topic";
 
     /*
      * Property names used with ONOS to define properties that are used when
@@ -99,6 +104,26 @@ public class KafkaNotificationBridge {
     private final static String KAFKA_RETRY_BACKOFF_MS_CONFIG = "kafka.retry.backoff.ms";
     private final static String KAFKA_SEND_BUFFER_CONFIG = "kafka.send.buffer";
     private final static String KAFKA_TIMEOUT_CONFIG = "kafka.timeout";
+    
+    private final static String PUBLISH_DEVICE_EVENT_CONFIG = "publish.device.events";
+    private final static String DEVICE_EVENT_KAFKA_TOPIC_CONFIG = "device.events.kafka.topic";
+    private final static String DEVICE_EVENT_RABBIT_EXCHANGE_CONFIG = "device.events.rabbit.exchange";
+    private final static String DEVICE_EVENT_RABBIT_TOPIC_CONFIG = "device.events.rabbit.topic";
+        
+    private final static String PUBLISH_LINK_EVENT_CONFIG = "publish.link.events";
+    private final static String LINK_EVENT_KAFKA_TOPIC_CONFIG = "link.events.kafka.topic";
+    private final static String LINK_EVENT_RABBIT_EXCHANGE_CONFIG = "link.events.rabbit.exchange";
+    private final static String LINK_EVENT_RABBIT_TOPIC_CONFIG = "link.events.rabbit.topic";
+
+    private final static String PUBLISH_VOLT_EVENT_CONFIG = "publish.volt.events";
+    private final static String VOLT_EVENT_KAFKA_TOPIC_CONFIG = "volt.events.kafka.topic";
+    private final static String VOLT_EVENT_RABBIT_EXCHANGE_CONFIG = "volt.events.rabbit.exchange";
+    private final static String VOLT_EVENT_RABBIT_TOPIC_CONFIG = "volt.events.rabbit.topic";
+
+    private final static String PUBLISH_VROUTER_EVENT_CONFIG = "publish.vrouter.events";
+    private final static String VROUTER_EVENT_KAFKA_TOPIC_CONFIG = "vrouter.events.kafka.topic";
+    private final static String VROUTER_EVENT_RABBIT_EXCHANGE_CONFIG = "vrouter.events.rabbit.exchange";
+    private final static String VROUTER_EVENT_RABBIT_TOPIC_CONFIG = "vrouter.events.rabbit.topic";
 
     /*
      * Default values used for instantiating a kafka producer
@@ -126,23 +151,19 @@ public class KafkaNotificationBridge {
 
     private final static String DEFAULT_RABBIT_HOST = "localhost";
     private final static String DEFAULT_RABBIT_PORT = "5672";
+    private final static String DEFAULT_RABBIT_USER = "";
+    private final static String DEFAULT_RABBIT_PASSWORD = "";
+    private final static String DEFAULT_RABBIT_EXCHANGE = "";
+    private final static String DEFAULT_RABBIT_TOPIC = "";
 
     private static final String DEFAULT_PUBLISH_KAFKA = "true";
     private static final String DEFAULT_PUBLISH_RABBIT = "false";
+    private static final String DEFAULT_PUBLISH_DEVICE_EVENTS = "false";
+    private static final String DEFAULT_PUBLISH_LINK_EVENTS = "false";
+    private static final String DEFAULT_PUBLISH_VROUTER_EVENTS = "false";
+    private static final String DEFAULT_PUBLISH_VOLT_EVENTS = "false";
 
-    private DeviceListener deviceListener = null;
-    private LinkListener linkListener = null;
     private Callback closure = null;
-
-    // For subscribing to device-related events
-    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
-    protected DeviceService deviceService;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
-    protected LinkService linkService;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
-    protected MastershipService mastershipService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected ClusterService clusterService;
@@ -162,6 +183,18 @@ public class KafkaNotificationBridge {
 
     @Property(name = "rabbit.port", value = DEFAULT_RABBIT_PORT, label = "Determines is messages are published via RabbitMQ.")
     private String cfgRabbitPort = DEFAULT_RABBIT_PORT;
+
+    @Property(name = "rabbit.user", value = DEFAULT_RABBIT_USER, label = "RabbitMQ username.")
+    private String cfgRabbitUser = DEFAULT_RABBIT_USER;
+
+    @Property(name = "rabbit.password", value = DEFAULT_RABBIT_PORT, label = "RabbitMQ password.")
+    private String cfgRabbitPassword = DEFAULT_RABBIT_PASSWORD;
+
+    @Property(name = "rabbit.exchange", value = DEFAULT_RABBIT_EXCHANGE, label = "RabbitMQ Exchange.")
+    private String cfgRabbitExchange = DEFAULT_RABBIT_EXCHANGE;
+
+    @Property(name = "rabbit.topic", value = DEFAULT_RABBIT_TOPIC, label = "RabbitMQ topic.")
+    private String cfgRabbitTopic = DEFAULT_RABBIT_TOPIC;
 
     /*
      * Kafka Configuration Properties
@@ -230,67 +263,63 @@ public class KafkaNotificationBridge {
     @Property(name = "kafka.timeout", value = DEFAULT_KAFKA_TIMEOUT, label = "The configuration controls the maximum amount of time the client will wait for the response of a request.")
     private String cfgKafkaTimeout = DEFAULT_KAFKA_TIMEOUT;
 
+    @Property(name = PUBLISH_DEVICE_EVENT_CONFIG, value = DEFAULT_PUBLISH_DEVICE_EVENTS, label = "Enable/Disable device event publish")
+    private String cfgPublishDeviceEvents = DEFAULT_PUBLISH_DEVICE_EVENTS;
+    private boolean cfgPublishDeviceEventsVal = Boolean.parseBoolean(cfgPublishDeviceEvents);
+
+    @Property(name = DEVICE_EVENT_KAFKA_TOPIC_CONFIG, value = "", label = "Configuration for kafka topic to be used to publish device events")
+    private String cfgDeviceEventsKafkaTopic = "";
+
+    @Property(name = DEVICE_EVENT_RABBIT_EXCHANGE_CONFIG, value = "", label = "Configuration for Rabbit exchange to be used to publish device events")
+    private String cfgDeviceEventsRabbitExchange = "";
+
+    @Property(name = DEVICE_EVENT_RABBIT_TOPIC_CONFIG, value = "", label = "Configuration for Rabbit topic to be used to publish device events")
+    private String cfgDeviceEventsRabbitTopic = "";
+
+    @Property(name = PUBLISH_LINK_EVENT_CONFIG, value = DEFAULT_PUBLISH_LINK_EVENTS, label = "Enable/Disable link event publish")
+    private String cfgPublishLinkEvents = DEFAULT_PUBLISH_LINK_EVENTS;
+    private boolean cfgPublishLinkEventsVal = Boolean.parseBoolean(cfgPublishLinkEvents);
+
+    @Property(name = LINK_EVENT_KAFKA_TOPIC_CONFIG, value = "", label = "Configuration for kafka topic to be used to publish link events")
+    private String cfgLinkEventsKafkaTopic = "";
+
+    @Property(name = LINK_EVENT_RABBIT_EXCHANGE_CONFIG, value = "", label = "Configuration for Rabbit exchange to be used to publish link events")
+    private String cfgLinkEventsRabbitExchange = "";
+
+    @Property(name = LINK_EVENT_RABBIT_TOPIC_CONFIG, value = "", label = "Configuration for Rabbit topic to be used to publish link events")
+    private String cfgLinkEventsRabbitTopic = "";
+
+    @Property(name = PUBLISH_VOLT_EVENT_CONFIG, value = DEFAULT_PUBLISH_VOLT_EVENTS, label = "Enable/Disable vOlt event publish")
+    private String cfgPublishVOltEvents = DEFAULT_PUBLISH_VOLT_EVENTS;
+    private boolean cfgPublishVOltEventsVal = Boolean.parseBoolean(cfgPublishVOltEvents);
+
+    @Property(name = VOLT_EVENT_KAFKA_TOPIC_CONFIG, value = "", label = "Configuration for kafka topic to be used to publish vOlt events")
+    private String cfgVOltEventsKafkaTopic = "";
+
+    @Property(name = VOLT_EVENT_RABBIT_EXCHANGE_CONFIG, value = "", label = "Configuration for Rabbit exchange to be used to publish vOlt events")
+    private String cfgVOltEventsRabbitExchange = "";
+
+    @Property(name = VOLT_EVENT_RABBIT_TOPIC_CONFIG, value = "", label = "Configuration for Rabbit topic to be used to publish vOlt events")
+    private String cfgVOltEventsRabbitTopic = "";
+
+    @Property(name = PUBLISH_VROUTER_EVENT_CONFIG, value = DEFAULT_PUBLISH_VROUTER_EVENTS, label = "Enable/Disable vRouter event publish")
+    private String cfgPublishVRouterEvents = DEFAULT_PUBLISH_VROUTER_EVENTS;
+    private boolean cfgPublishVRouterEventsVal = Boolean.parseBoolean(cfgPublishVRouterEvents);
+
+    @Property(name = VROUTER_EVENT_KAFKA_TOPIC_CONFIG, value = "", label = "Configuration for kafka topic to be used to publish vRouter events")
+    private String cfgVRouterEventsKafkaTopic = "";
+
+    @Property(name = VROUTER_EVENT_RABBIT_EXCHANGE_CONFIG, value = "", label = "Configuration for Rabbit exchange to be used to publish vRouter events")
+    private String cfgVRouterEventsRabbitExchange = "";
+
+    @Property(name = VROUTER_EVENT_RABBIT_TOPIC_CONFIG, value = "", label = "Configuration for Rabbit topic to be used to publish vRouter events")
+    private String cfgVRouterEventsRabbitTopic = "";
+
     private KafkaProducer<String, String> kafkaProducer = null;
     private Channel rabbitProducer = null;
-
-    /**
-     * Marshal a {@link org.onosproject.net.device.DeviceEvent} to a stringified
-     * JSON object.
-     *
-     * @param event
-     *            the device event to marshal
-     * @return stringified JSON encoding of the device event
-     */
-    private String marshalEvent(DeviceEvent event) {
-        StringBuilder builder = new StringBuilder();
-        builder.append('{');
-        builder.append(String.format("\"type\":\"%s\",", event.type().toString()));
-        builder.append(String.format("\"time\":%d,", event.time()));
-        builder.append("\"subject\":{");
-        builder.append(String.format("\"id\":\"%s\",", event.subject().id()));
-        builder.append(String.format("\"chassis\":\"%s\",", event.subject().chassisId().toString()));
-        builder.append(String.format("\"hw-version\":\"%s\",", event.subject().hwVersion()));
-        builder.append(String.format("\"manufacturer\":\"%s\",", event.subject().manufacturer()));
-        builder.append(String.format("\"serial-number\":\"%s\",", event.subject().serialNumber()));
-        builder.append(String.format("\"sw-version\":\"%s\",", event.subject().swVersion()));
-        builder.append(String.format("\"provider\":\"%s\",", event.subject().providerId().id()));
-        builder.append(String.format("\"type\":\"%s\"", event.subject().type()));
-        builder.append('}');
-        if (event.port() != null) {
-            builder.append(",\"port\":{");
-            builder.append(String.format("\"type\":\"%s\",", event.port().type()));
-            builder.append(String.format("\"number\":%d,", event.port().number().toLong()));
-            builder.append(String.format("\"speed\":%d,", event.port().portSpeed()));
-            builder.append(String.format("\"enabled\":%s", event.port().isEnabled()));
-            builder.append('}');
-        }
-        builder.append('}');
-        return builder.toString();
-    }
-
-    /**
-     * Marshal a {@link org.onosproject.net.link.LinkEvent} to a stringified
-     * JSON object.
-     *
-     * @param event
-     *            the link event to marshal
-     * @return stringified JSON encoding of the link event
-     */
-    private String marshalEvent(LinkEvent event) {
-        StringBuilder builder = new StringBuilder();
-        builder.append('{');
-        builder.append(String.format("\"type\":\"%s\",", event.type().toString()));
-        builder.append(String.format("\"time\":%d,", event.time()));
-        builder.append(String.format("\"src\":\"%s\",", event.subject().src().deviceId().toString()));
-        builder.append(String.format("\"src-port\":%d,", event.subject().src().port().toLong()));
-        builder.append(String.format("\"dst\":\"%s\",", event.subject().dst().deviceId().toString()));
-        builder.append(String.format("\"dst-port\":%d,", event.subject().dst().port().toLong()));
-        builder.append(String.format("\"state\":\"%s\",", event.subject().state()));
-        builder.append(String.format("\"durable\":%s", event.subject().isDurable()));
-        builder.append('}');
-        return builder.toString();
-    }
-
+    private HashMap<String,PublisherSource> publisherRegistry = new HashMap<>();
+    private HashMap<String, PublisherSourceCfgState> pendingPublisherStarts = new HashMap<>(); 
+    
     /**
      * Called when component configuration options are modified and makes the
      * appropriate changes to the components implementation.
@@ -336,6 +365,30 @@ public class KafkaNotificationBridge {
         sVal = Strings.nullToEmpty(Tools.get(properties, RABBIT_PORT_CONFIG)).trim();
         if (!sVal.isEmpty() && !sVal.equals(cfgRabbitPort)) {
             cfgRabbitPort = sVal;
+            isRabbitModified = true;
+        }
+
+        sVal = Strings.nullToEmpty(Tools.get(properties, RABBIT_USER_CONFIG)).trim();
+        if (!sVal.isEmpty() && !sVal.equals(cfgRabbitUser)) {
+            cfgRabbitUser = sVal;
+            isRabbitModified = true;
+        }
+
+        sVal = Strings.nullToEmpty(Tools.get(properties, RABBIT_PASSWORD_CONFIG)).trim();
+        if (!sVal.isEmpty() && !sVal.equals(cfgRabbitPassword)) {
+            cfgRabbitPassword = sVal;
+            isRabbitModified = true;
+        }
+
+        sVal = Strings.nullToEmpty(Tools.get(properties, RABBIT_EXCHANGE_CONFIG)).trim();
+        if (!sVal.isEmpty() && !sVal.equals(cfgRabbitExchange)) {
+            cfgRabbitExchange = sVal;
+            isRabbitModified = true;
+        }
+
+        sVal = Strings.nullToEmpty(Tools.get(properties, RABBIT_TOPIC_CONFIG)).trim();
+        if (!sVal.isEmpty() && !sVal.equals(cfgRabbitTopic)) {
+            cfgRabbitTopic = sVal;
             isRabbitModified = true;
         }
 
@@ -516,6 +569,84 @@ public class KafkaNotificationBridge {
                     "Rabbit configuration options have been modified, but values have not been changed, so no action is being performed based on the modifications.");
         }
 
+        sVal = Strings.nullToEmpty(Tools.get(properties, PUBLISH_DEVICE_EVENT_CONFIG)).trim();
+        if (!sVal.isEmpty()) {
+            boolean bVal = Boolean.parseBoolean(sVal);
+            if (bVal != cfgPublishDeviceEventsVal) {
+            	cfgPublishDeviceEvents = sVal;
+                cfgPublishDeviceEventsVal = bVal;
+
+                PublisherSource publisher = null;
+                synchronized(this) {
+                	publisher = getPublisherSource(DEVICE_EVENT_PUBLISHER_ID);
+                	if (publisher == null) {
+                		//TODO Put into pending transactions
+                		log.warn("The Publisher is not ready for {} event publishing", DEVICE_EVENT_PUBLISHER_ID);
+                		cfgDeviceEventsKafkaTopic = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                		cfgDeviceEventsRabbitExchange = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                		cfgDeviceEventsRabbitTopic = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                		PublisherSourceCfgState cfgState = new PublisherSourceCfgState(DEVICE_EVENT_PUBLISHER_ID,
+                				cfgPublishDeviceEvents,
+                				cfgDeviceEventsKafkaTopic,
+                				cfgDeviceEventsRabbitExchange,
+                				cfgDeviceEventsRabbitTopic);
+                		pendingPublisherStarts.put(DEVICE_EVENT_PUBLISHER_ID, cfgState);
+                	}
+                }
+                if (publisher != null) {
+                	if (!cfgPublishDeviceEventsVal) {
+                		publisher.stop();
+                	} else {
+                		cfgDeviceEventsKafkaTopic = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                		cfgDeviceEventsRabbitExchange = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                		cfgDeviceEventsRabbitTopic = Strings.nullToEmpty(Tools.get(properties, DEVICE_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                		InternalNotifier notifier = new InternalNotifier(cfgDeviceEventsKafkaTopic, 
+                				cfgDeviceEventsRabbitExchange,
+                				cfgDeviceEventsRabbitTopic);
+                		publisher.start(notifier);
+                	}
+                }
+            }
+        }
+        sVal = Strings.nullToEmpty(Tools.get(properties, PUBLISH_LINK_EVENT_CONFIG)).trim();
+        if (!sVal.isEmpty()) {
+            boolean bVal = Boolean.parseBoolean(sVal);
+            if (bVal != cfgPublishLinkEventsVal) {
+            	cfgPublishLinkEvents = sVal;
+                cfgPublishLinkEventsVal = bVal;
+
+                PublisherSource publisher = null;
+                synchronized(this) {
+                	publisher = getPublisherSource(LINK_EVENT_PUBLISHER_ID);
+                	if (publisher == null) {
+                		//TODO Put into pending transactions
+                		log.warn("The Publisher is not ready for {} event publishing", LINK_EVENT_PUBLISHER_ID);
+                		cfgLinkEventsKafkaTopic = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                		cfgLinkEventsRabbitExchange = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                		cfgLinkEventsRabbitTopic = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                		PublisherSourceCfgState cfgState = new PublisherSourceCfgState(LINK_EVENT_PUBLISHER_ID,
+                				cfgPublishLinkEvents,
+                				cfgLinkEventsKafkaTopic,
+                				cfgLinkEventsRabbitExchange,
+                				cfgLinkEventsRabbitTopic);
+                		pendingPublisherStarts.put(LINK_EVENT_PUBLISHER_ID, cfgState);
+                	}
+                }
+                if (publisher != null) {
+                	if (!cfgPublishLinkEventsVal) {
+                		publisher.stop();
+                	} else {
+                		cfgLinkEventsKafkaTopic = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                		cfgLinkEventsRabbitExchange = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                		cfgLinkEventsRabbitTopic = Strings.nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                		InternalNotifier notifier = new InternalNotifier(cfgLinkEventsKafkaTopic, 
+                				cfgLinkEventsRabbitExchange,
+                				cfgLinkEventsRabbitTopic);
+                		publisher.start(notifier);
+                	}
+                }
+            }
+        }
     }
 
     private synchronized void createRabbitProducer() {
@@ -530,12 +661,21 @@ public class KafkaNotificationBridge {
             }
         }
 
-        log.error("Attempting to connect to RabbitMQ at {}:{} ", cfgRabbitHost, cfgRabbitPort);
+        log.info("Attempting to connect to RabbitMQ at {}:{} ", cfgRabbitHost, cfgRabbitPort);
         try {
             ConnectionFactory factory = new ConnectionFactory();
             factory.setHost(cfgRabbitHost);
             factory.setPort(Integer.parseInt(cfgRabbitPort));
+            if (!cfgRabbitUser.isEmpty()) {
+            	factory.setUsername(cfgRabbitUser);
+            	factory.setPassword(cfgRabbitPassword);
+            }
             rabbitProducer = factory.newConnection().createChannel();
+            if (!cfgRabbitExchange.isEmpty()) {
+            	rabbitProducer.exchangeDeclare(cfgRabbitExchange, "topic");
+            }
+            log.info("Connected to RabbitMQ server at {}:{} and uses exchange {}", cfgRabbitHost,
+            		cfgRabbitPort, cfgRabbitExchange);
         } catch (IOException | TimeoutException e) {
             log.error("Unable to create Rabbit producer to {}:{}, no events will be published on the Kafka bridge",
                     cfgRabbitHost, cfgRabbitPort, e);
@@ -638,87 +778,6 @@ public class KafkaNotificationBridge {
                 }
             }
         };
-
-        deviceListener = new DeviceListener() {
-            @Override
-            public void event(DeviceEvent event) {
-
-                /*
-                 * Filtering out PPRT_STAT events (too many of them) and also
-                 * only publishing if the subject of the event is mastered by
-                 * the current instance so that we get some load balancing
-                 * across instances in a clustered environment.
-                 */
-                if (event.type() != Type.PORT_STATS_UPDATED) {
-                    if (mastershipService.isLocalMaster(event.subject().id())) {
-                        String encoded = marshalEvent(event);
-                        log.debug("SEND: (kafka = {}, rabbit = {}) {}", cfgPublishKafka, cfgPublishRabbit, encoded);
-                        if (cfgPublishKafkaVal && kafkaProducer != null) {
-                            kafkaProducer.send(new ProducerRecord<String, String>(DEVICE_TOPIC, encoded), closure);
-                        }
-                        if (cfgPublishRabbitVal && rabbitProducer != null) {
-                            try {
-                                rabbitProducer.basicPublish("", DEVICE_TOPIC, null, encoded.getBytes());
-                            } catch (IOException e) {
-                                log.error("Unexpected error while attempting to publish via Rabbit on topic {}",
-                                        DEVICE_TOPIC, e);
-                            }
-                        }
-                    } else {
-                        log.debug("DROPPING DEVICE EVENT: not local master: {}",
-                                mastershipService.getMasterFor(event.subject().id()));
-                    }
-                }
-            }
-        };
-
-        linkListener = new LinkListener() {
-
-            @Override
-            public void event(LinkEvent event) {
-
-                /*
-                 * Only publish events if the destination of the link is
-                 * mastered by the current instance so that we get some load
-                 * balancing across instances in a clustered environment.
-                 */
-                if (mastershipService.isLocalMaster(event.subject().dst().deviceId())) {
-                    String encoded = marshalEvent(event);
-                    log.debug("SEND: (kafka = {}, rabbit = {}) {}", cfgPublishKafka, cfgPublishRabbit, encoded);
-                    if (cfgPublishKafkaVal && kafkaProducer != null) {
-                        kafkaProducer.send(new ProducerRecord<String, String>(LINK_TOPIC, marshalEvent(event)));
-                    }
-                    if (cfgPublishRabbitVal && rabbitProducer != null) {
-                        try {
-                            rabbitProducer.basicPublish("", LINK_TOPIC, null, encoded.getBytes());
-                        } catch (IOException e) {
-                            log.error("Unexpected error while attempting to publish via Rabbit on topic {}", LINK_TOPIC,
-                                    e);
-
-                        }
-                    }
-                } else {
-                    log.debug("DROPPING LINK EVENT: not local master: {}",
-                            mastershipService.getMasterFor(event.subject().src().deviceId()));
-                }
-            }
-        };
-
-        if (deviceService != null) {
-            deviceService.addListener(deviceListener);
-            log.info("Added device notification listener for Kafka bridge");
-        } else {
-            log.error(
-                    "Unable to resolve device service and add device listener, no device events will be published on Kafka bridge");
-        }
-
-        if (linkService != null) {
-            linkService.addListener(linkListener);
-            log.info("Added link notification listener for Kafka bridge");
-        } else {
-            log.error(
-                    "Unable to resolve link service and add link listener, no link events will be published on Kafka bridge");
-        }
     }
 
     @Deactivate
@@ -732,18 +791,6 @@ public class KafkaNotificationBridge {
          */
         if (configService != null) {
             configService.unregisterProperties(this.getClass(), false);
-        }
-
-        if (deviceService != null) {
-            log.info("Removing device listener for Kafka bridge");
-            deviceService.removeListener(deviceListener);
-            deviceService = null;
-        }
-
-        if (linkService != null) {
-            linkService.removeListener(linkListener);
-            log.info("Removing link listener for Kafka bridge");
-            linkService = null;
         }
 
         /*
@@ -762,5 +809,115 @@ public class KafkaNotificationBridge {
             }
             rabbitProducer = null;
         }
+        
+        //TODO: Stop all publishers
     }
+    
+    private class InternalNotifier implements Notifier {
+    	private String kafkaTopic = "";
+    	private String rabbitExchange = "";
+    	private String rabbitTopic = "";
+    	
+    	private InternalNotifier(String kafkaTopic, String rabbitExchange, String rabbitTopic) {
+    		this.kafkaTopic = kafkaTopic;
+    		this.rabbitExchange = rabbitExchange;
+    		this.rabbitTopic = rabbitTopic;
+		}
+
+		@Override
+		public void publish(String message) {
+            log.debug("SEND: (kafka = {}, rabbit = {}) {}", cfgPublishKafka, cfgPublishRabbit, message);
+            if (cfgPublishKafkaVal && kafkaProducer != null) {
+                kafkaProducer.send(new ProducerRecord<String, String>(this.kafkaTopic, message), closure);
+            }
+            if (cfgPublishRabbitVal && rabbitProducer != null) {
+                try {
+                    rabbitProducer.basicPublish(this.rabbitExchange, this.rabbitTopic, null, message.getBytes());
+                } catch (IOException e) {
+                    log.error("Unexpected error while attempting to publish via Rabbit on topic {}",
+                            this.rabbitExchange, e);
+                }
+            }
+			
+		}
+    }
+
+    //PublisherRegistry interface methods implemented here
+	@Override
+	public void register(PublisherSource publisherSource) {
+        checkNotNull(publisherSource, "PublisherSource cannot be null");
+        String publishes = publisherSource.publishes();
+        checkState(!publisherRegistry.containsKey(publishes), "PublisherSource %s already registered", publishes);
+
+        synchronized (this) {
+            publisherRegistry.put(publishes, publisherSource);
+            PublisherSourceCfgState pending = pendingPublisherStarts.get(publishes);
+            if (pending != null) {
+            	log.info("Processing pending publisher start for {}",publishes);
+            	InternalNotifier notifier = new InternalNotifier(pending.kafkaTopic(), 
+            			pending.rabbitExchange(),
+            			pending.rabbitTopic());
+            	publisherSource.start(notifier);
+            	pendingPublisherStarts.remove(publishes);
+            }
+		}
+	}
+
+	@Override
+	public void unregister(PublisherSource publisherSource) {
+        checkNotNull(publisherSource, "PublisherSource cannot be null");
+        publisherRegistry.remove(publisherSource.publishes());
+	}
+
+	@Override
+	public Set<PublisherSource> getPublihserSources() {
+        return ImmutableSet.copyOf(publisherRegistry.values());
+	}
+
+	@Override
+    public PublisherSource getPublisherSource(String publishes) {
+		return publisherRegistry.get(publishes);
+	}
+	
+	//Class to store the pending publisher configuration state
+	private class PublisherSourceCfgState {
+		private String publisherId; //Not used
+		private String publish;
+		private String kafkaTopic;
+		private String rabbitExchange;
+		private String rabbitTopic;
+		
+		PublisherSourceCfgState(String publisherId, 
+				String publish, 
+				String kafkaTopic, 
+				String rabbitExchange, 
+				String rabbitTopic) {
+			this.publisherId = publisherId;
+			this.publish = publish;
+			this.kafkaTopic = kafkaTopic;
+			this.rabbitExchange = rabbitExchange;
+			this.rabbitTopic = rabbitTopic;
+		}
+
+		public String publisherId() {
+			return publisherId;
+		}
+
+		public String publish() {
+			return publish;
+		}
+
+		public String kafkaTopic() {
+			return kafkaTopic;
+		}
+
+		public String rabbitExchange() {
+			return rabbitExchange;
+		}
+
+		public String rabbitTopic() {
+			return rabbitTopic;
+		}
+
+	}
 }

@@ -19,7 +19,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<properties>
-		<onos.version>1.3.0</onos.version>
+		<onos.version>1.5.0-SNAPSHOT</onos.version>
 		<onos.app.name>org.ciena.onos.onos-kafka</onos.app.name>
 		<onos.app.origin>Ciena Networks</onos.app.origin>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -45,6 +45,12 @@
 		<dependency>
 			<groupId>org.onosproject</groupId>
 			<artifactId>onos-api</artifactId>
+			<version>${onos.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.onosproject</groupId>
+			<artifactId>onos-app-olt</artifactId>
 			<version>${onos.version}</version>
 		</dependency>
 
@@ -139,7 +145,7 @@
 			<plugin>
 				<groupId>org.apache.felix</groupId>
 				<artifactId>maven-bundle-plugin</artifactId>
-				<version>2.5.3</version>
+				<version>3.0.1</version>
 				<extensions>true</extensions>
 			</plugin>
 			<plugin>
