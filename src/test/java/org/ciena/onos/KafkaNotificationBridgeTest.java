@@ -48,7 +48,9 @@ import org.osgi.service.component.ComponentContext;
  */
 public class KafkaNotificationBridgeTest {
 
-    private KafkaNotificationBridge component;
+    private KafkaNotificationBridge componentKafka;
+    private DeviceEventPublisher componentDevicePublisher;
+    private LinkEventPublisher componentLinkPublisher;
 
     protected DeviceService mockDeviceService;
     protected LinkService mockLinkService;
@@ -107,7 +109,9 @@ public class KafkaNotificationBridgeTest {
      */
     @After
     public void tearDownMocks() {
-        component.deactivate();
+    	componentDevicePublisher.deactivate();
+    	componentLinkPublisher.deactivate();
+        componentKafka.deactivate();
         EasyMock.verify(mockDeviceService);
     }
 
@@ -119,13 +123,26 @@ public class KafkaNotificationBridgeTest {
         EasyMock.replay(mockMastershipService);
         EasyMock.replay(mockClusterService);
         EasyMock.replay(mockControllerNode);
-        component = new KafkaNotificationBridge();
-        component.deviceService = mockDeviceService;
-        component.linkService = mockLinkService;
-        component.configService = mockConfigService;
-        component.mastershipService = mockMastershipService;
-        component.clusterService = mockClusterService;
-        component.activate(null);
+        componentKafka = new KafkaNotificationBridge();
+        componentDevicePublisher = new DeviceEventPublisher();
+        componentLinkPublisher = new LinkEventPublisher();
+
+        componentDevicePublisher.deviceService = mockDeviceService;
+        componentDevicePublisher.mastershipService = mockMastershipService;
+        componentDevicePublisher.publisherRegistry = componentKafka;
+
+        componentLinkPublisher.linkService = mockLinkService;
+        componentLinkPublisher.mastershipService = mockMastershipService;
+        componentLinkPublisher.publisherRegistry = componentKafka;
+
+        componentKafka.configService = mockConfigService;
+        componentKafka.clusterService = mockClusterService;
+        
+        componentKafka.activate(null);
+        componentDevicePublisher.activate(null);
+        componentDevicePublisher.start(null,null);
+        componentLinkPublisher.activate(null);
+        componentLinkPublisher.start(null,null);
     }
 
 }
