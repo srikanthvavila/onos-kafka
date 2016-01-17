@@ -96,7 +96,7 @@ public class VOLTEventPublisher implements PublisherSource {
                     });
                 }
             }
-            break;
+            return builder.toString();
         case DEVICE_DISCONNECTED:
             break;
         case SUBSCRIBER_REGISTERED:
@@ -118,11 +118,11 @@ public class VOLTEventPublisher implements PublisherSource {
                     });
                 }
             }
-            break;
+            return builder.toString();
         case SUBSCRIBER_UNREGISTERED:
             break;
         }
-        return null;// TODO
+        return null;
     }
 
     @Override
@@ -131,7 +131,6 @@ public class VOLTEventPublisher implements PublisherSource {
             oltListener = new AccessDeviceListener() {
                 @Override
                 public void event(AccessDeviceEvent event) {
-
                     String encoded = encodeEvent(event, userData);
                     notifier.publish(encoded);
                 }

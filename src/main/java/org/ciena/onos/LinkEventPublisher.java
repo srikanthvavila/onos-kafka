@@ -92,8 +92,9 @@ public class LinkEventPublisher implements PublisherSource {
         builder.append(String.format("\"state\":\"%s\",", event.subject().state()));
         builder.append(String.format("\"durable\":%s", event.subject().isDurable()));
         if (userData != null) {
-            Map<String, String> userDataMap = new Gson().fromJson(userData, new TypeToken<HashMap<String, String>>() {
-            }.getType());
+            Map<String, String> userDataMap = new Gson().fromJson(userData,
+                    new TypeToken<HashMap<String, String>>() {
+                    }.getType());
             if (userDataMap != null) {
                 userDataMap.keySet().forEach((key) -> {
                     builder.append(String.format(",\"%s\":\"%s\"", key, userDataMap.get(key)));

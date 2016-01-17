@@ -18,7 +18,6 @@ package org.ciena.onos;
 import java.io.IOException;
 import java.util.Dictionary;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -335,6 +334,7 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
     private Channel rabbitProducer = null;
     private HashMap<String, PublisherSource> publisherRegistry = new HashMap<>();
     private HashMap<String, PublisherSourceCfgState> pendingPublisherStarts = new HashMap<>();
+
 
     /**
      * Called when component configuration options are modified and makes the

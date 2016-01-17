@@ -137,7 +137,7 @@ public class KafkaNotificationBridgeTest {
 
         componentKafka.configService = mockConfigService;
         componentKafka.clusterService = mockClusterService;
-        
+
         componentKafka.activate(null);
         componentDevicePublisher.activate(null);
         componentDevicePublisher.start(null,null);
