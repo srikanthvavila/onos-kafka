@@ -692,14 +692,14 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
                     if (publisher == null) {
                         log.warn("The Publisher is not ready for {} event publishing", VOLT_EVENT_PUBLISHER_ID);
                         cfgVOltEventsKafkaTopic = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_KAFKA_TOPIC_CONFIG)).trim();
                         cfgVOltEventsRabbitExchange = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
                         cfgVOltEventsRabbitTopic = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_RABBIT_TOPIC_CONFIG)).trim();
                         cfgVOltEventsOpaqueInfo = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_OPAQUE_INFO_EMBEDD_IN_MESSAGES)).trim();
-                        PublisherSourceCfgState cfgState = new PublisherSourceCfgState(LINK_EVENT_PUBLISHER_ID,
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_OPAQUE_INFO_EMBEDD_IN_MESSAGES)).trim();
+                        PublisherSourceCfgState cfgState = new PublisherSourceCfgState(VOLT_EVENT_PUBLISHER_ID,
                                 cfgPublishVOltEvents, cfgVOltEventsKafkaTopic, cfgVOltEventsRabbitExchange,
                                 cfgVOltEventsRabbitTopic, cfgVOltEventsOpaqueInfo);
                         pendingPublisherStarts.put(VOLT_EVENT_PUBLISHER_ID, cfgState);
@@ -710,13 +710,13 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
                         publisher.stop();
                     } else {
                         cfgVOltEventsKafkaTopic = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_KAFKA_TOPIC_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_KAFKA_TOPIC_CONFIG)).trim();
                         cfgVOltEventsRabbitExchange = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_RABBIT_EXCHANGE_CONFIG)).trim();
                         cfgVOltEventsRabbitTopic = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_RABBIT_TOPIC_CONFIG)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_RABBIT_TOPIC_CONFIG)).trim();
                         cfgVOltEventsOpaqueInfo = Strings
-                                .nullToEmpty(Tools.get(properties, LINK_EVENT_OPAQUE_INFO_EMBEDD_IN_MESSAGES)).trim();
+                                .nullToEmpty(Tools.get(properties, VOLT_EVENT_OPAQUE_INFO_EMBEDD_IN_MESSAGES)).trim();
                         InternalNotifier notifier = new InternalNotifier(cfgVOltEventsKafkaTopic,
                                 cfgVOltEventsRabbitExchange, cfgVOltEventsRabbitTopic);
                         publisher.start(notifier, cfgVOltEventsOpaqueInfo);
@@ -904,6 +904,9 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
         @Override
         public void publish(String message) {
             log.debug("SEND: (kafka = {}, rabbit = {}) {}", cfgPublishKafka, cfgPublishRabbit, message);
+            if (message == null) {
+                return;
+            }
             if (cfgPublishKafkaVal && kafkaProducer != null) {
                 kafkaProducer.send(new ProducerRecord<String, String>(this.kafkaTopic, message), closure);
             }

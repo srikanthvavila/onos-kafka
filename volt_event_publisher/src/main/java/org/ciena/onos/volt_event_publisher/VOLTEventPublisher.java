@@ -88,7 +88,7 @@ public class VOLTEventPublisher implements PublisherSource {
             builder.append(String.format("\"event_type\":\"volt.device\","));
             builder.append(String.format("\"time\":%d,", event.time()));
             builder.append("\"payload\":{");
-            builder.append(String.format("\"id\":\"%s\",", event.subject().uri()));
+            builder.append(String.format("\"id\":\"%s\"", event.subject().uri()));
             if (userData != null) {
                 Map<String, String> userDataMap = new Gson().fromJson(userData,
                         new TypeToken<HashMap<String, String>>() {
@@ -99,6 +99,8 @@ public class VOLTEventPublisher implements PublisherSource {
                     });
                 }
             }
+            builder.append('}');
+            builder.append('}');
             return builder.toString();
         case DEVICE_DISCONNECTED:
             break;
@@ -109,7 +111,7 @@ public class VOLTEventPublisher implements PublisherSource {
             builder.append(String.format("\"time\":%d,", event.time()));
             builder.append("\"payload\":{");
             builder.append(String.format("\"id\":\"%s\",", event.subject().uri()));
-            builder.append(String.format("\"subscriber_id\":\"%s\",",
+            builder.append(String.format("\"subscriber_id\":\"%s\"",
                     event.sVlanId().toString() + event.cVlanId().toString()));
             if (userData != null) {
                 Map<String, String> userDataMap = new Gson().fromJson(userData,
@@ -121,6 +123,8 @@ public class VOLTEventPublisher implements PublisherSource {
                     });
                 }
             }
+            builder.append('}');
+            builder.append('}');
             return builder.toString();
         case SUBSCRIBER_UNREGISTERED:
             break;
@@ -135,7 +139,9 @@ public class VOLTEventPublisher implements PublisherSource {
                 @Override
                 public void event(AccessDeviceEvent event) {
                     String encoded = encodeEvent(event, userData);
-                    notifier.publish(encoded);
+                    if (encoded != null) {
+                        notifier.publish(encoded);
+                    }
                 }
             };
 
