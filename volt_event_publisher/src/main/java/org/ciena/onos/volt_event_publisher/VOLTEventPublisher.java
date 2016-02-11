@@ -86,6 +86,7 @@ public class VOLTEventPublisher implements PublisherSource {
     private String encodeEvent(AccessDeviceEvent event, String userData) {
         switch (event.type()) {
         case DEVICE_CONNECTED:
+            //TODO: Use JSONObject instead of StringBuilder
             StringBuilder builder = new StringBuilder();
             builder.append('{');
             builder.append(String.format("\"event_type\":\"volt.device\","));
@@ -108,7 +109,27 @@ public class VOLTEventPublisher implements PublisherSource {
             builder.append('}');
             return builder.toString();
         case DEVICE_DISCONNECTED:
-            break;
+            builder = new StringBuilder();
+            builder.append('{');
+            builder.append(String.format("\"event_type\":\"volt.device.disconnect\","));
+            builder.append(String.format("\"priority\":\"INFO\","));
+            df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            builder.append(String.format("\"timestamp\":\"%s\",", df.format(new Date())));
+            builder.append("\"payload\":{");
+            builder.append(String.format("\"id\":\"%s\"", event.subject().uri()));
+            if (userData != null) {
+                Map<String, String> userDataMap = new Gson().fromJson(userData,
+                        new TypeToken<HashMap<String, String>>() {
+                        }.getType());
+                if (userDataMap != null) {
+                    userDataMap.keySet().forEach((key) -> {
+                        builder.append(String.format(",\"%s\":\"%s\"", key, userDataMap.get(key)));
+                    });
+                }
+            }
+            builder.append('}');
+            builder.append('}');
+            return builder.toString();
         case SUBSCRIBER_REGISTERED:
             builder = new StringBuilder();
             builder.append('{');
@@ -134,7 +155,29 @@ public class VOLTEventPublisher implements PublisherSource {
             builder.append('}');
             return builder.toString();
         case SUBSCRIBER_UNREGISTERED:
-            break;
+            builder = new StringBuilder();
+            builder.append('{');
+            builder.append(String.format("\"event_type\":\"volt.device.subscriber.unregister\","));
+            builder.append(String.format("\"priority\":\"INFO\","));
+            df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            builder.append(String.format("\"timestamp\":\"%s\",", df.format(new Date())));
+            builder.append("\"payload\":{");
+            builder.append(String.format("\"id\":\"%s\",", event.subject().uri()));
+            builder.append(String.format("\"subscriber_id\":\"%s\"",
+                    event.sVlanId().toString() + event.cVlanId().toString()));
+            if (userData != null) {
+                Map<String, String> userDataMap = new Gson().fromJson(userData,
+                        new TypeToken<HashMap<String, String>>() {
+                        }.getType());
+                if (userDataMap != null) {
+                    userDataMap.keySet().forEach((key) -> {
+                        builder.append(String.format(",\"%s\":\"%s\"", key, userDataMap.get(key)));
+                    });
+                }
+            }
+            builder.append('}');
+            builder.append('}');
+            return builder.toString();
         }
         return null;
     }

@@ -912,13 +912,13 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
             }
             if (cfgPublishRabbitVal && rabbitProducer != null) {
                 try {
+                    log.debug("RABBIT SEND: (exchange = {}, topic = {})", this.rabbitExchange, this.rabbitTopic);
                     rabbitProducer.basicPublish(this.rabbitExchange, this.rabbitTopic, null, message.getBytes());
                 } catch (IOException e) {
                     log.error("Unexpected error while attempting to publish via Rabbit on topic {}",
                             this.rabbitExchange, e);
                 }
             }
-
         }
     }
 
