@@ -15,6 +15,9 @@
  */
 package org.ciena.onos.volt_event_publisher;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -86,7 +89,9 @@ public class VOLTEventPublisher implements PublisherSource {
             StringBuilder builder = new StringBuilder();
             builder.append('{');
             builder.append(String.format("\"event_type\":\"volt.device\","));
-            builder.append(String.format("\"time\":%d,", event.time()));
+            builder.append(String.format("\"priority\":\"INFO\","));
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            builder.append(String.format("\"timestamp\":\"%s\",", df.format(new Date())));
             builder.append("\"payload\":{");
             builder.append(String.format("\"id\":\"%s\"", event.subject().uri()));
             if (userData != null) {
@@ -108,7 +113,9 @@ public class VOLTEventPublisher implements PublisherSource {
             builder = new StringBuilder();
             builder.append('{');
             builder.append(String.format("\"event_type\":\"volt.device.subscriber\","));
-            builder.append(String.format("\"time\":%d,", event.time()));
+            builder.append(String.format("\"priority\":\"INFO\","));
+            df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+            builder.append(String.format("\"timestamp\":\"%s\",", df.format(new Date())));
             builder.append("\"payload\":{");
             builder.append(String.format("\"id\":\"%s\",", event.subject().uri()));
             builder.append(String.format("\"subscriber_id\":\"%s\"",
