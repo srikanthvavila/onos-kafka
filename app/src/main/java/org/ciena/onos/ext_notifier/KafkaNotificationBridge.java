@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
+import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -336,6 +337,7 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
 
     private KafkaProducer<String, String> kafkaProducer = null;
     private Channel rabbitProducer = null;
+    private AMQP.BasicProperties rabbitProperties = null;
     private HashMap<String, PublisherSource> publisherRegistry = new HashMap<>();
     private HashMap<String, PublisherSourceCfgState> pendingPublisherStarts = new HashMap<>();
 
@@ -751,6 +753,7 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
             if (!cfgRabbitExchange.isEmpty()) {
                 rabbitProducer.exchangeDeclare(cfgRabbitExchange, "topic");
             }
+            rabbitProperties = new AMQP.BasicProperties.Builder().contentType("application/json").build();
             log.info("Connected to RabbitMQ server at {}:{} and uses exchange {}", cfgRabbitHost, cfgRabbitPort,
                     cfgRabbitExchange);
         } catch (IOException | TimeoutException e) {
@@ -913,7 +916,10 @@ public class KafkaNotificationBridge implements PublisherRegistry<PublisherSourc
             if (cfgPublishRabbitVal && rabbitProducer != null) {
                 try {
                     log.debug("RABBIT SEND: (exchange = {}, topic = {})", this.rabbitExchange, this.rabbitTopic);
-                    rabbitProducer.basicPublish(this.rabbitExchange, this.rabbitTopic, null, message.getBytes());
+                    rabbitProducer.basicPublish(this.rabbitExchange,
+                                                this.rabbitTopic,
+                                                rabbitProperties,
+                                                message.getBytes());
                 } catch (IOException e) {
                     log.error("Unexpected error while attempting to publish via Rabbit on topic {}",
                             this.rabbitExchange, e);
